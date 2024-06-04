@@ -1,6 +1,5 @@
 /* Tabulka cislo 1
- * pro data mezd a cen potravin za Českou republiku 
- * sjednocených na totožné porovnatelné období – společné roky
+ * pro data mezd a cen potravin za Českou republiku sjednocených na totožné porovnatelné období – společné roky
  */
 
 CREATE TABLE t_Arina_Spirkova_project_SQL_primary_final AS
@@ -33,16 +32,18 @@ ORDER BY food_category, date_from, price_value;
  * pro dodatečná data o dalších evropských státech
  */
 
-CREATE TABLE t_Arina_Spirkova_project_SQL_secondary_final AS
+CREATE OR REPLACE  TABLE t_Arina_Spirkova_project_SQL_secondary_final AS
 SELECT 
 	e.country,
 	e.population,
 	e.gini,
-	e.GDP
+	e.GDP,
+	e.year
 FROM economies e 
 JOIN countries c ON e.country = c.country
 WHERE c.continent = 'Europe'
 	AND e.GDP IS NOT NULL;
+
 
 
 /* Otazka cislo 1
@@ -102,10 +103,24 @@ ORDER BY wages_difference_percentage ASC;
 
 Nejvetsi mezirocni pokles byl zaznamenan u odvetvi Peněžnictví a pojišťovnictví, kde prumerna mzda se snizila o -8,91% a TO z 50254 Kč do 45775 Kč 
 
+-- Dotaz, který ukáže odvětví a roky s rostoucimi mzdami:
+SELECT
+    industry_branch,
+    older_year,
+    newer_year,
+    older_wages,
+    newer_wages,
+    wages_difference_czk,
+    wages_difference_percentage,
+    wages_trend
+FROM v_arina_spirkova_wages_growth_trend_by_sector_and_year
+WHERE wages_trend = 'UP'
+ORDER BY wages_difference_percentage DESC;
+
+Nejvetsi mezirocni rust byl zaznamenan u odvetvi Težbaa dobývání, kde prumerna mzda se zvýšila o 13.81% a TO z 25705 Kč do 29254 Kč 
 
 /* Otazka číslo 2
-Kolik je možné si koupit litrů mléka a kilogramů chleba 
-za první a poslední srovnatelné období v dostupných datech cen a mezd?
+Kolik je možné si koupit litrů mléka a kilogramů chleba za první a poslední srovnatelné období v dostupných datech cen a mezd?
  */
 
 SELECT 
@@ -191,6 +206,190 @@ Ve skutečnosti výsledky ukazují, že cena této kategorie dokonce klesala ka�
 /* Otazka cislo 4
  * Existuje rok, ve kterém byl meziroční nárůst cen potravin výrazně vyšší než růst mezd (větší než 10 %)?
  */
+
+CREATE VIEW Prumerna_mzda_v_CR_2006_2018 AS
+SELECT
+	industry_branch,
+    payroll_year AS year,
+    AVG(avg_wages) AS average_wage
+FROM
+    t_Arina_Spirkova_project_SQL_primary_final
+WHERE
+    payroll_year BETWEEN 2006 AND 2018
+GROUP BY
+    payroll_year
+ORDER BY
+    payroll_year;
+
+SELECT *
+FROM Prumerna_mzda_v_CR_2006_2018 pmvc;
+
+CREATE VIEW Vyvoj_rustu_mezd AS
+WITH wage_growth AS (
+    SELECT
+        payroll_year AS year,
+        AVG(avg_wages) AS avg_wages
+    FROM
+        t_Arina_Spirkova_project_SQL_primary_final
+    WHERE
+        payroll_year BETWEEN 2006 AND 2018
+    GROUP BY
+        payroll_year
+)
+SELECT
+    w1.year,
+    ((w1.avg_wages - w0.avg_wages) / w0.avg_wages) * 100 AS wage_increase_pct
+FROM
+    wage_growth w1
+JOIN
+    wage_growth w0 ON w1.year = w0.year + 1
+ORDER BY
+    w1.year;
+
+SELECT *
+FROM Vyvoj_rustu_mezd vrm;
+
+CREATE VIEW Prumerne_ceny_potravin_v_CR_2006_2018 AS
+SELECT
+	food_category,
+    YEAR(date_from) AS year,
+    AVG(price) AS average_price
+FROM
+    t_Arina_Spirkova_project_SQL_primary_final
+WHERE
+    YEAR(date_from) BETWEEN 2006 AND 2018
+GROUP BY
+    YEAR(date_from)
+ORDER BY
+    YEAR(date_from);
+   
+SELECT *
+FROM `Průměrné_ceny_potravin` pmrcp;
+
+CREATE VIEW Trend_vyvoje_rustu_cen_potravin AS
+WITH price_growth AS (
+    SELECT
+        YEAR(date_from) AS year,
+        AVG(price) AS avg_price
+    FROM
+        t_Arina_Spirkova_project_SQL_secondary_final
+    WHERE
+        YEAR(date_from) BETWEEN 2006 AND 2018
+    GROUP BY
+        YEAR(date_from)
+)
+SELECT
+    p1.year,
+    ((p1.avg_price - p0.avg_price) / p0.avg_price) * 100 AS price_increase_pct
+FROM
+    price_growth p1
+JOIN
+    price_growth p0 ON p1.year = p0.year + 1
+ORDER BY
+    p1.year;
+   
+SELECT *
+FROM Trend_vyvoje_rustu_cen_potravin tvrcp;
+
+CREATE VIEW Porovnani_mezirocniho_narustu_cen_a_mezd AS
+WITH price_growth AS (
+    SELECT
+        YEAR(date_from) AS year,
+        AVG(price) AS avg_price
+    FROM
+        t_Arina_Spirkova_project_SQL_primary_final
+    GROUP BY
+        YEAR(date_from)
+),
+wage_growth AS (
+    SELECT
+        payroll_year AS year,
+        AVG(avg_wages) AS avg_wages
+    FROM
+        t_Arina_Spirkova_project_SQL_primary_final
+    GROUP BY
+        payroll_year
+),
+price_change AS (
+    SELECT
+        p1.year,
+        ((p1.avg_price - p0.avg_price) / p0.avg_price) * 100 AS price_increase_pct
+    FROM
+        price_growth p1
+    JOIN
+        price_growth p0 ON p1.year = p0.year + 1
+),
+wage_change AS (
+    SELECT
+        w1.year,
+        ((w1.avg_wages - w0.avg_wages) / w0.avg_wages) * 100 AS wage_increase_pct
+    FROM
+        wage_growth w1
+    JOIN
+        wage_growth w0 ON w1.year = w0.year + 1
+)
+SELECT
+    p.year,
+    p.price_increase_pct,
+    w.wage_increase_pct
+FROM
+    price_change p
+JOIN
+    wage_change w ON p.year = w.year
+ORDER BY
+    p.year;
+   
+SELECT * 
+FROM Porovnani_mezirocniho_narustu_cen_a_mezd;
+
+/*
+ * Má výška HDP vliv na změny ve mzdách a cenách potravin? 
+ * Neboli, pokud HDP vzroste výrazněji v jednom roce, 
+ * projeví se to na cenách potravin či mzdách ve stejném nebo následujícím roce výraznějším růstem?
+ */
+
+CREATE OR REPLACE VIEW v_gdr_v_CR_2006_2018 AS
+SELECT *
+FROM t_Arina_Spirkova_project_SQL_secondary_final taspssf 
+WHERE country = 'Czech Republic';
+
+--
+CREATE OR REPLACE VIEW v_gdr_differences_v_CR_2006_2018 AS
+SELECT
+    gdp1.`year` AS old_year,
+    gdp1.GDP AS old_gdp,
+    gdp2.`year` AS new_year,
+    gdp2.GDP AS new_gdp,
+    ROUND(AVG(gdp2.GDP - gdp1.GDP) / gdp1.GDP * 100, 2) AS gdp_diff_percentage
+FROM v_gdr_v_CR_2006_2018 AS gdp1
+JOIN v_gdr_v_CR_2006_2018 AS gdp2
+    ON gdp2.country = gdp1.country
+    AND gdp2.`year` = gdp1.`year` + 1
+GROUP BY gdp1.`year`;
+
+SELECT * 
+FROM v_gdr_v_CR_2006_2018 vgvc;
+
+
+
+
+
+
+
+
+
+   
+
+
+
+   
+   
+
+
+
+---
+
+
 
 
 
