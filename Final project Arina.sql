@@ -1,8 +1,9 @@
 /* Tabulka cislo 1
- * pro data mezd a cen potravin za Českou republiku sjednocených na totožné porovnatelné období – společné roky
+ * pro data mezd a cen potravin za Českou republiku 
+ * sjednocených na totožné porovnatelné období – společné roky
  */
 
-CREATE TABLE t_Arina_Spirkova_project_SQL_primary_final AS
+CREATE TABLE OR REPLACE t_Arina_Spirkova_project_SQL_primary_final AS
 SELECT
 	cpc.name AS food_category,
 	cpc.price_value,
@@ -44,13 +45,11 @@ JOIN countries c ON e.country = c.country
 WHERE c.continent = 'Europe'
 	AND e.GDP IS NOT NULL;
 
-
-
-/* Otazka cislo 1
+/* Otázka číslo 1
 Rostou v průběhu let mzdy ve všech odvětvích, nebo v některých klesají?
 */
 
--- 1. Vytvorime pohled prumerne mzdy podle roku a sektoru prace
+-- 1. Vytvoříme pohled pro průměrné mzdy podle roku a sektoru práce
 CREATE OR REPLACE VIEW 
 	v_arina_spikova_avg_wages_by_year_and_Sector AS
 SELECT
@@ -60,9 +59,17 @@ SELECT
 FROM t_Arina_Spirkova_project_SQL_primary_final taspspf 
 GROUP BY industry_branch, payroll_year;
 
-SELECT * 
-FROM v_arina_spikova_avg_wages_by_year_and_Sector;
+-/* Popis:
+*Tento dotaz vytváří pohled, který zobrazuje průměrné mzdy v korunách pro jednotlivá odvětví v konkrétních letech. 
+*Data jsou seskupena podle odvětví (industry_branch) a roku (payroll_year), přičemž se vypočítává průměrná mzda pro každou kombinaci 
+*těchto hodnot.
+*/
 
+-- Zobrazení dat z vytvořeného pohledu
+SELECT * 
+FROM v_arina_spikova_avg_wages_by_year_and_Sector; -- Tento dotaz jednoduše zobrazuje všechna data z pohledu v_arina_spikova_avg_wages_by_year_and_Sector, což znamená, že se zobrazí průměrné mzdy podle odvětví a roku
+
+-- Vytvoření pohledu pro trend růstu mezd podle sektoru a roku
 CREATE OR REPLACE VIEW v_arina_spirkova_wages_growth_trend_by_sector_and_year AS 
 SELECT
     newer_avg.industry_branch, 
@@ -82,12 +89,18 @@ JOIN v_arina_spikova_avg_wages_by_year_and_Sector AS older_avg
     AND newer_avg.payroll_year = older_avg.payroll_year + 1
 ORDER BY newer_avg.industry_branch;
 
+/* Tento dotaz vytváří pohled, který analyzuje meziroční trend růstu mezd v jednotlivých odvětvích. 
+ * Vypočítává se rozdíl mezi mzdami v jednotlivých letech a zobrazuje se, zda mzdy rostly (UP) nebo klesaly (DOWN). 
+ * Pohled také ukazuje procentuální změnu mezd mezi těmito roky.
+ */
+
+-- Zobrazení dat z pohledu s trendy růstu mezd podle sektoru a roku
 SELECT *
 FROM v_arina_spirkova_wages_growth_trend_by_sector_and_year;
 
--- Mzdy ve vsech sledovanych odveti rostou, rust vsak nebyl rovnomerny a byl zaznamenan i pokles.
+-- Mzdy ve všech sledovaných odvětí rostou, růst však nebyl rovnoměrný a byl zaznamenán i pokles.
 
--- Dotaz, který ukáže odvětví a roky s klesajícími mzdami:
+-- Dotaz, který ukázuje odvětví a roky s klesajícími mzdami:
 SELECT
     industry_branch,
     older_year,
@@ -101,26 +114,17 @@ FROM v_arina_spirkova_wages_growth_trend_by_sector_and_year
 WHERE wages_trend = 'DOWN'
 ORDER BY wages_difference_percentage ASC;
 
-Nejvetsi mezirocni pokles byl zaznamenan u odvetvi Peněžnictví a pojišťovnictví, kde prumerna mzda se snizila o -8,91% a TO z 50254 Kč do 45775 Kč 
+/* Tento dotaz filtruje data z pohledu v_arina_spirkova_wages_growth_trend_by_sector_and_year a zobrazuje pouze ty roky 
+ * a odvětví, kde došlo k poklesu mezd.Data jsou seřazena podle procentuálního poklesu, přičemž na prvních místech jsou 
+ * zobrazeny největší poklesy.
+ */
 
--- Dotaz, který ukáže odvětví a roky s rostoucimi mzdami:
-SELECT
-    industry_branch,
-    older_year,
-    newer_year,
-    older_wages,
-    newer_wages,
-    wages_difference_czk,
-    wages_difference_percentage,
-    wages_trend
-FROM v_arina_spirkova_wages_growth_trend_by_sector_and_year
-WHERE wages_trend = 'UP'
-ORDER BY wages_difference_percentage DESC;
-
-Nejvetsi mezirocni rust byl zaznamenan u odvetvi Težbaa dobývání, kde prumerna mzda se zvýšila o 13.81% a TO z 25705 Kč do 29254 Kč 
+-- Výsledkem posledního dotazu je zjištění, že největší meziroční pokles mezd byl zaznamenán v odvětví Peněžnictví a pojišťovnictví, 
+-- kde průměrná mzda klesla o -8,91 % z 50 254 Kč na 45 775 Kč.
 
 /* Otazka číslo 2
-Kolik je možné si koupit litrů mléka a kilogramů chleba za první a poslední srovnatelné období v dostupných datech cen a mezd?
+Kolik je možné si koupit litrů mléka a kilogramů chleba 
+za první a poslední srovnatelné období v dostupných datech cen a mezd?
  */
 
 SELECT 
@@ -342,59 +346,121 @@ ORDER BY
 SELECT * 
 FROM Porovnani_mezirocniho_narustu_cen_a_mezd;
 
-/*
+/*	Otazka cislo 5
  * Má výška HDP vliv na změny ve mzdách a cenách potravin? 
  * Neboli, pokud HDP vzroste výrazněji v jednom roce, 
  * projeví se to na cenách potravin či mzdách ve stejném nebo následujícím roce výraznějším růstem?
  */
 
-CREATE OR REPLACE VIEW v_gdr_v_CR_2006_2018 AS
-SELECT *
-FROM t_Arina_Spirkova_project_SQL_secondary_final taspssf 
-WHERE country = 'Czech Republic';
-
---
-CREATE OR REPLACE VIEW v_gdr_differences_v_CR_2006_2018 AS
-SELECT
-    gdp1.`year` AS old_year,
-    gdp1.GDP AS old_gdp,
-    gdp2.`year` AS new_year,
-    gdp2.GDP AS new_gdp,
-    ROUND(AVG(gdp2.GDP - gdp1.GDP) / gdp1.GDP * 100, 2) AS gdp_diff_percentage
-FROM v_gdr_v_CR_2006_2018 AS gdp1
-JOIN v_gdr_v_CR_2006_2018 AS gdp2
-    ON gdp2.country = gdp1.country
-    AND gdp2.`year` = gdp1.`year` + 1
-GROUP BY gdp1.`year`;
-
+-- Шаг 1: Создание представления для ВВП в Чехии (2006-2018)
+CREATE OR REPLACE VIEW v_spirkova_gdp_cr_2006_2018 AS 
 SELECT * 
-FROM v_gdr_v_CR_2006_2018 vgvc;
+FROM t_Arina_Spirkova_project_SQL_secondary_final
+WHERE country = 'Czech Republic'
+AND year BETWEEN 2006 AND 2018;
 
+-- Шаг 2: Представление для тренда ВВП (междугодовые изменения)
 
-
-
-
-
-
-
-
+CREATE OR REPLACE VIEW v_spirkova_arina_gdp_trend_diff_cr_2006_2018 AS 
+SELECT 
+    gdp1.year AS older_year, 
+    gdp1.GDP AS older_gdp, 
+    gdp2.year AS newer_year, 
+    gdp2.GDP AS newer_gdp,
+    ROUND((gdp2.GDP - gdp1.GDP) / gdp1.GDP * 100, 2) AS gdp_diff_percentage
+FROM 
+    v_spirkova_gdp_cr_2006_2018 AS gdp1
+JOIN 
+    v_spirkova_gdp_cr_2006_2018 AS gdp2
+ON 
+    gdp2.year = gdp1.year + 1;
    
+-- Шаг 3: Представление для тренда средней заработной платы (междугодовые изменения)
 
-
-
+CREATE OR REPLACE VIEW v_spirkova_avg_wages_trend_diff_cr_2006_2018 AS 
+SELECT 
+    wage1.payroll_year AS older_year, 
+    wage2.payroll_year AS newer_year, 
+    ROUND((wage2.avg_wages - wage1.avg_wages) / wage1.avg_wages * 100, 2) AS avg_wages_diff_percentage
+FROM 
+    t_Arina_Spirkova_project_SQL_primary_final AS wage1
+JOIN 
+    t_Arina_Spirkova_project_SQL_primary_final AS wage2
+ON 
+    wage2.payroll_year = wage1.payroll_year + 1
+WHERE 
+    wage1.payroll_year BETWEEN 2006 AND 2018
+GROUP BY 
+    wage1.payroll_year;
    
+-- Шаг 4: Представление для тренда средней цены на продукты питания (междугодовые изменения)
+
+CREATE OR REPLACE VIEW v_spirkova_avg_food_price_trend_diff_cr_2006_2018 AS 
+SELECT 
+    price1.year AS older_year, 
+    price2.year AS newer_year, 
+    ROUND((price2.avg_price - price1.avg_price) / price1.avg_price * 100, 2) AS avg_price_diff_percentage
+FROM 
+    (SELECT YEAR(date_from) AS year, AVG(price) AS avg_price 
+     FROM t_Arina_Spirkova_project_SQL_primary_final 
+     WHERE YEAR(date_from) BETWEEN 2006 AND 2018 
+     GROUP BY YEAR(date_from)) AS price1
+JOIN 
+    (SELECT YEAR(date_from) AS year, AVG(price) AS avg_price 
+     FROM t_Arina_Spirkova_project_SQL_primary_final 
+     WHERE YEAR(date_from) BETWEEN 2006 AND 2018 
+     GROUP BY YEAR(date_from)) AS price2
+ON 
+    price2.year = price1.year + 1;
+
+-- Шаг 5: Объединение данных ВВП, заработных плат и цен на продукты питания
    
+CREATE OR REPLACE VIEW v_spirkova_arina_foodprice_wages_gdp_trend AS 
+SELECT 
+    gdp.older_year, 
+    gdp.newer_year, 
+    fpt.avg_price_diff_percentage, 
+    wag.avg_wages_diff_percentage, 
+    gdp.gdp_diff_percentage
+FROM 
+    v_spirkova_arina_gdp_trend_diff_cr_2006_2018 AS gdp
+JOIN 
+    v_spirkova_avg_wages_trend_diff_cr_2006_2018 AS wag
+ON 
+    wag.older_year = gdp.older_year
+JOIN 
+    v_spirkova_avg_food_price_trend_diff_cr_2006_2018 AS fpt 
+ON 
+    fpt.older_year = gdp.older_year;
+
+-- Шаг 6: Анализ средних значений междугодовых изменений за весь период
+   
+-- Средние междугодовые изменения за весь период
+SELECT 
+    ROUND(AVG(avg_price_diff_percentage), 2) AS avg_foodprice_growth_trend_percentage, 
+    ROUND(AVG(avg_wages_diff_percentage), 2) AS avg_wages_growth_trend_percentage, 
+    ROUND(AVG(gdp_diff_percentage), 2) AS avg_gdp_growth_trend_percentage
+FROM 
+    v_spirkova_arina_foodprice_wages_gdp_trend;
+
+SELECT 
+	ROUND(AVG(avg_price_diff_percentage), 2) AS avg_foodprice_growth_trend_percentage, 
+    ROUND(AVG(avg_wages_diff_percentage), 2) AS avg_wages_growth_trend_percentag, 
+    ROUND(AVG(gdp_diff_percentage), 2) AS avg_gdp_growth_trend_percentage,
+    (SELECT MIN(older_year) FROM v_spirkova_arina_foodprice_wages_gdp_trend) AS year_from,
+    (SELECT MAX(newer_year) FROM v_spirkova_arina_foodprice_wages_gdp_trend) AS year_to
+FROM 
+    v_spirkova_arina_foodprice_wages_gdp_trend;
 
 
-
----
-
-
-
-
-
-
-
-
-
-
+-- Шаг 7: Анализ суммарных изменений за весь период
+   
+-- Суммарные изменения за весь период
+SELECT 
+    MIN(older_year) AS year_from,
+    MAX(newer_year) AS year_to,
+    ROUND(SUM(avg_price_diff_percentage), 2) AS total_foodprice_growth_trend_percentage, 
+    ROUND(SUM(avg_wages_diff_percentage), 2) AS total_wages_growth_trend_percentage, 
+    ROUND(SUM(gdp_diff_percentage), 2) AS total_gdp_growth_trend_percentage
+FROM 
+    v_spirkova_arina_foodprice_wages_gdp_trend; 
